@@ -17,8 +17,8 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - name: Build 
-      run: npm run build 
+    - name: Start 
+      run: npm start
 
     - name: Build Docker image
       run: docker build -t ${{ secrets.APP_IMAGE }} .
