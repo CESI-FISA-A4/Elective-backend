@@ -6,6 +6,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 var cors = require('cors');
 const productRoutes = require('./app/routes/productRoutes');
+const testRoutes = require('./app/routes/testRoutes');
 
 // const authRoutes = require('./app/routes/authRoutes');
 
@@ -29,6 +30,13 @@ app.use(express.json());
 
 /** -------------------------------------------Products------------------------------------------------- */
 app.use('/api/products', productRoutes);
+app.use('/api/test', testRoutes);
+
+
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger-output.json');
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 
 /**--------------------------------------------Start server--------------------------------------------- */
