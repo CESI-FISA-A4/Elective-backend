@@ -1,51 +1,80 @@
-require('dotenv').config(); // Load env variables
-
-const { initDatabase } = require('./app/utils/initMongoDB');
-
 const express = require('express');
-const bodyParser = require('body-parser');
-var cors = require('cors');
-const productRoutes = require('./app/routes/productRoutes');
-const testRoutes = require('./app/routes/testRoutes');
-
-// const authRoutes = require('./app/routes/authRoutes');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
 const app = express();
-
-console.log("before initDatabase");
-initDatabase();
-console.log("after initDatabase");
-
-
-/** -------------------------------------------Main middlewares----------------------------------------- */
-app.use(cors());
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.json());
-/**----------------------------------------------------------------------------------------------------- */
 
+// Mock database to store users
+const users = {};
 
-/** -------------------------------------------Authentification----------------------------------------- */
-// app.use('/api/auth', authRoutes);
+// Secret key for JWT
+const secretKey = 'yourSecretKey';
 
-/** -------------------------------------------Products------------------------------------------------- */
-app.use('/api/products', productRoutes);
-app.use('/api/test', testRoutes);
+// Middleware to verify token
+function verifyToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return res.status(401).send('Token non fourni.');
 
+    const token = authHeader.split(' ')[1]; // Supprimer le mot-clé "Bearer" s'il est présent
+    if (!token) return res.status(401).send('Token non fourni.');
 
-const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./swagger-output.json');
+    jwt.verify(token, secretKey, (err, decoded) => {
+        if (err) return res.status(403).send('Token invalide.');
+        req.user = decoded;
+        next();
+    });
+}
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+// Register route
+app.post('/register', async(req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).send('Nom d\'utilisateur et mot de passe requis.');
 
+    if (users[username]) return res.status(400).send('Utilisateur déjà existant.');
 
-/**--------------------------------------------Start server--------------------------------------------- */
-const PORT = process.env.PORT || 3000;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    console.log(password);
+    users[username] = { username, password: hashedPassword };
+    res.status(200).send('Utilisateur créé avec succès.');
+});
 
-app.listen(
-    PORT,
-    process.env.HOST,
-    () => {
-        console.log(`Server started : ${PORT}`);
-    }
-)
+// Login route
+app.post('/login', async(req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).send('Nom d\'utilisateur et mot de passe requis.');
+
+    const user = users[username];
+    if (!user) return res.status(401).send('Utilisateur non trouvé.');
+
+    const validPassword = await bcrypt.compare(password, user.password); // Comparaison des hashs
+    if (!validPassword) return res.status(401).send('Mot de passe incorrect.');
+
+    const token = jwt.sign({ username }, secretKey, { expiresIn: '1h' });
+    res.status(200).json({ token });
+});
+
+// Change password route
+app.post('/change-password', async(req, res) => {
+    const { username, password, newPassword } = req.body;
+    if (!username || !password || !newPassword) return res.status(400).send('Nom d\'utilisateur, ancien et nouveau mot de passe requis.');
+
+    const user = users[username];
+    if (!user) return res.status(401).send('Utilisateur non trouvé.');
+
+    const validPassword = await bcrypt.compare(password, user.password); // Comparaison des hashs
+    if (!validPassword) return res.status(401).send('Mot de passe incorrect.');
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10); // Hash du nouveau mot de passe reçu
+    user.password = hashedNewPassword;
+    res.status(200).send('Mot de passe modifié avec succès.');
+});
+
+// Test route
+app.get('/test', verifyToken, (req, res) => {
+    res.status(200).send('Route accessible uniquement par les utilisateurs connectés.');
+});
+
+app.listen(5000, () => {
+    console.log('Serveur démarré sur le port 5000');
+});
